@@ -1,0 +1,57 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": "public",
+  "regions": ["sin1"],
+  "rewrites": [
+    { "source": "/", "destination": "/login.html" },
+
+    { "source": "/auth.php", "destination": "/api/auth" },
+    { "source": "/orders.php", "destination": "/api/orders" },
+    { "source": "/products.php", "destination": "/api/products" },
+    { "source": "/google_auth.php", "destination": "/api/google_auth" },
+
+    { "source": "/dashboard.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/dashboard" },
+    { "source": "/dashboard.php", "destination": "/dashboard.html" },
+
+    { "source": "/admin.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/admin" },
+    { "source": "/admin.php", "destination": "/admin.html" },
+
+    { "source": "/salesreport.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/salesreport" },
+    { "source": "/salesreport.php", "has": [{ "type": "query", "key": "date_from" }], "destination": "/api/salesreport" },
+    { "source": "/salesreport.php", "destination": "/salesreport.html" },
+
+    { "source": "/customers.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/customers" },
+    { "source": "/customer.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/customers" },
+    { "source": "/customers.php", "destination": "/customer.html" },
+    { "source": "/customer.php", "destination": "/customer.html" },
+
+    { "source": "/forgot_password.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/forgot_password" },
+    { "source": "/forgot_password.php", "destination": "/forgot_password.html" },
+
+    { "source": "/login.php", "destination": "/login.html" },
+    { "source": "/register.php", "destination": "/register.html" },
+    { "source": "/pos_terminal.php", "destination": "/pos_terminal.html" },
+    { "source": "/inventory.php", "destination": "/inventory.html" },
+    { "source": "/analytics.php", "destination": "/analytics.html" },
+    { "source": "/settings.php", "destination": "/settings.html" },
+    { "source": "/offline.php", "destination": "/offline.html" }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "max-age=0, must-revalidate" },
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    }
+  ]
+}

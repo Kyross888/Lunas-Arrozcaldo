@@ -1,0 +1,17 @@
+{
+  "name": "lunas-pos",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Luna's POS — Node.js serverless API + static PWA on Vercel, MongoDB Atlas database",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "busboy": "^1.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.8.0"
+  }
+}
