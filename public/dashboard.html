@@ -451,11 +451,15 @@
             document.getElementById('lbl-top').textContent = 'Top Selling Items ' + R.label;
             document.getElementById('lbl-trend').textContent = R.label === '(This Month)' ? 'Revenue Trend (This Month)' : 'Revenue Trend (7 Days' + (R.from === R.to && !isToday ? ' to ' + R.to : '') + ')';
 
+            // Self-contained fetcher (does not depend on a cached/old js/api.js)
+            const dq = (action, r) => fetch('dashboard.php?action=' + action + (b ? '&branch_id=' + b : '') +
+                '&date_from=' + r.from + '&date_to=' + r.to, { credentials: 'same-origin' })
+                .then(x => x.json()).catch(() => ({ success: false, data: [] }));
             const [kpis, trend, cats, top] = await Promise.all([
-                api.dashboard.kpis(b, range),
-                api.dashboard.revenueTrend(b, { from: R.trendFrom, to: R.trendTo }),
-                api.dashboard.categorySales(b, range),
-                api.dashboard.topProducts(b, range),
+                dq('kpis', range),
+                dq('revenue_trend', { from: R.trendFrom, to: R.trendTo }),
+                dq('category_sales', range),
+                dq('top_products', range),
             ]);
 
             if (kpis.success) {
