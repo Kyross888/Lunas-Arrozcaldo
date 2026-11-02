@@ -24,8 +24,6 @@
 
     { "source": "/customers.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/customers" },
     { "source": "/customer.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/customers" },
-    { "source": "/customers.php", "destination": "/customer.html" },
-    { "source": "/customer.php", "destination": "/customer.html" },
 
     { "source": "/forgot_password.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/forgot_password" },
     { "source": "/forgot_password.php", "destination": "/forgot_password.html" },
