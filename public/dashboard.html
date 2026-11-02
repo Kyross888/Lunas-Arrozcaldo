@@ -311,13 +311,23 @@
     <div class="main-content">
         <header class="header">
             <h2 style="margin:0;">Dashboard</h2>
-            <div style="color: var(--text-light); font-weight: 600;">Admin User</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:5px;background:#f8fafc;padding:5px 10px;border-radius:6px;border:1px solid #ddd;">
+                    <small style="color:var(--text-light);font-weight:bold;">History:</small>
+                    <input type="date" id="historyDate" onchange="filterByDate()" style="border:none;background:transparent;outline:none;cursor:pointer;font-size:13px;">
+                </div>
+                <select id="timeFilter" onchange="changeRange()" style="padding:8px;border-radius:6px;border:1px solid #ddd;outline:none;cursor:pointer;">
+                    <option value="today" selected>Today</option>
+                    <option value="7days">Last 7 Days</option>
+                    <option value="month">This Month</option>
+                </select>
+            </div>
         </header>
 
         <div class="content">
             <div class="grid-cards">
                 <div class="card" style="border-left: 5px solid #5a67d8;">
-                    <h3>Total Sales Today</h3>
+                    <h3 id="lbl-sales">Total Sales Today</h3>
                     <div class="number" id="kpi-revenue">₱0.00</div>
                 </div>
                 <div class="card" style="border-left: 5px solid #48bb78;">
@@ -336,22 +346,22 @@
 
             <div class="analytics-container">
                 <div class="card">
-                    <h3>Revenue Trend (Last 7 Days)</h3>
+                    <h3 id="lbl-trend">Revenue Trend (Last 7 Days)</h3>
                     <div class="chart-wrapper">
                         <canvas id="revenueChart"></canvas>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h3>Order Sources</h3>
+                    <h3>Sales by Category <span style="float:right;color:var(--text-light);"><i class="fa-solid fa-ellipsis-vertical"></i></span></h3>
                     <div class="chart-wrapper">
-                        <canvas id="sourceChart"></canvas>
+                        <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
             </div>
 
             <div class="card" style="margin-top: 20px;">
-                <h3>Top Selling Items Today</h3>
+                <h3 id="lbl-top">Top Selling Items Today</h3>
                 <div id="recentActivity">
                     <p style="color:#718096;margin-top:15px;">Loading…</p>
                 </div>
@@ -377,15 +387,77 @@
         }
 
         // ── Charts ────────────────────────────────────────────
-        let revenueChart, sourceChart;
+        let revenueChart, categoryChart, me;
+
+        const CATEGORIES = [
+            { key: 'Breakfast', label: 'Breakfast', color: '#5a67d8' },
+            { key: 'Merienda', label: 'Merienda', color: '#4fd1c5' },
+            { key: 'Burgers And Sandwiches', label: 'Burgers & Sand.', color: '#f6ad55' },
+            { key: 'Rice Meal', label: 'Rice Meal', color: '#fc8181' },
+            { key: 'Native', label: 'Native', color: '#68d391' },
+            { key: 'Dessert', label: 'Dessert', color: '#f687b3' },
+            { key: 'Drinks', label: 'Drinks', color: '#76e4f7' },
+        ];
+
+        const ymd = d => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        const shift = (str, n) => { const d = new Date(str + 'T00:00:00+08:00'); d.setDate(d.getDate() + n); return ymd(d); };
+
+        // Returns {from,to, trendFrom,trendTo, label}
+        function currentRange() {
+            const today = ymd(new Date());
+            const picked = document.getElementById('historyDate').value;
+            if (picked) return { from: picked, to: picked, trendFrom: shift(picked, -6), trendTo: picked, label: 'on ' + picked };
+            const r = document.getElementById('timeFilter').value;
+            if (r === '7days') return { from: shift(today, -6), to: today, trendFrom: shift(today, -6), trendTo: today, label: '(Last 7 Days)' };
+            if (r === 'month') { const f = today.slice(0, 8) + '01'; return { from: f, to: today, trendFrom: f, trendTo: today, label: '(This Month)' }; }
+            return { from: today, to: today, trendFrom: shift(today, -6), trendTo: today, label: 'Today' };
+        }
+
+        function changeRange() { document.getElementById('historyDate').value = ''; loadDashboard(); }
+        function filterByDate() { if (document.getElementById('historyDate').value) loadDashboard(); }
+
+        function initCharts() {
+            revenueChart = new Chart(document.getElementById('revenueChart').getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Revenue (₱)', data: [], borderColor: '#5a67d8', backgroundColor: 'rgba(90,103,216,0.1)', borderWidth: 3, fill: true, tension: 0.4 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } },
+                }
+            });
+            categoryChart = new Chart(document.getElementById('categoryChart').getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: CATEGORIES.map(c => c.label), datasets: [{ data: CATEGORIES.map(() => 1), backgroundColor: CATEGORIES.map(() => '#e2e8f0'), borderWidth: 0, hoverOffset: 8 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '65%',
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } },
+                }
+            });
+        }
 
         async function loadDashboard() {
-            // Auth guard
-            const user = await requireLogin();
-            if (!user) return;
+            if (!me) {
+                me = await requireLogin();
+                if (!me) return;
+                initCharts();
+            }
+            const b = me.branch_id || '';
+            const R = currentRange();
+            const range = { from: R.from, to: R.to };
+            const isToday = R.label === 'Today';
 
-            // KPI cards
-            const kpis = await api.dashboard.kpis(user.branch_id || '');
+            document.getElementById('lbl-sales').textContent = 'Total Sales ' + R.label;
+            document.getElementById('lbl-top').textContent = 'Top Selling Items ' + R.label;
+            document.getElementById('lbl-trend').textContent = R.label === '(This Month)' ? 'Revenue Trend (This Month)' : 'Revenue Trend (7 Days' + (R.from === R.to && !isToday ? ' to ' + R.to : '') + ')';
+
+            const [kpis, trend, cats, top] = await Promise.all([
+                api.dashboard.kpis(b, range),
+                api.dashboard.revenueTrend(b, { from: R.trendFrom, to: R.trendTo }),
+                api.dashboard.categorySales(b, range),
+                api.dashboard.topProducts(b, range),
+            ]);
+
             if (kpis.success) {
                 document.getElementById('kpi-revenue').textContent = fmt(kpis.revenue_today);
                 document.getElementById('kpi-orders').textContent = kpis.orders_today;
@@ -393,104 +465,33 @@
                 document.getElementById('kpi-outstock').textContent = kpis.out_of_stock;
             }
 
-            // Revenue trend
-            const trend = await api.dashboard.revenueTrend(user.branch_id || '');
-            const labels = trend.data ? trend.data.map(d => {
-                const dt = new Date(d.day);
-                return dt.toLocaleDateString('en-PH', {
-                    weekday: 'short'
-                });
-            }) : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            const values = trend.data ? trend.data.map(d => parseFloat(d.revenue)) : [];
+            const rows = trend.success ? trend.data : [];
+            revenueChart.data.labels = rows.map(d => new Date(d.day + 'T00:00:00+08:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }));
+            revenueChart.data.datasets[0].data = rows.map(d => parseFloat(d.revenue));
+            revenueChart.update();
 
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            if (revenueChart) revenueChart.destroy();
-            revenueChart = new Chart(revenueCtx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Revenue (₱)',
-                        data: values,
-                        borderColor: '#5a67d8',
-                        backgroundColor: 'rgba(90,103,216,0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#f0f0f0'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    },
-                }
-            });
+            const totals = {};
+            CATEGORIES.forEach(c => totals[c.key] = 0);
+            (cats.success ? cats.data : []).forEach(c => { if (totals[c.category] !== undefined) totals[c.category] += c.qty; });
+            const arr = CATEGORIES.map(c => totals[c.key]);
+            const has = arr.some(v => v > 0);
+            categoryChart.data.datasets[0].data = has ? arr : CATEGORIES.map(() => 1);
+            categoryChart.data.datasets[0].backgroundColor = CATEGORIES.map(c => has ? c.color : '#e2e8f0');
+            categoryChart.update();
 
-            // Order sources doughnut
-            const sources = await api.dashboard.orderSources(user.branch_id || '');
-            const srcLabels = sources.data ? sources.data.map(d => d.label) : ['Dine-in', 'Take-out', 'Coupon'];
-            const srcValues = sources.data ? sources.data.map(d => parseInt(d.value)) : [0, 0, 0];
-
-            const sourceCtx = document.getElementById('sourceChart').getContext('2d');
-            if (sourceChart) sourceChart.destroy();
-            sourceChart = new Chart(sourceCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: srcLabels,
-                    datasets: [{
-                        data: srcValues,
-                        backgroundColor: ['#5a67d8', '#48bb78', '#ed8936'],
-                        borderWidth: 0,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                boxWidth: 12,
-                                padding: 15
-                            }
-                        }
-                    },
-                    cutout: '70%',
-                }
-            });
-
-            // Recent activity - top products
-            const top = await api.dashboard.topProducts(user.branch_id || '');
-            const activityEl = document.getElementById('recentActivity');
+            const el = document.getElementById('recentActivity');
             if (top.success && top.data.length) {
-                activityEl.innerHTML = top.data.map(p =>
+                el.innerHTML = top.data.map(p =>
                     `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;">
-                        <span>${p.name}</span>
+                        <span>${escHtml(p.name)}</span>
                         <span style="font-weight:600;">${p.total_qty} sold · ${fmt(p.total_revenue)}</span>
-                    </div>`
-                ).join('');
+                    </div>`).join('');
             } else {
-                activityEl.innerHTML = '<p style="color:#718096;margin-top:15px;">No sales data for today yet.</p>';
+                el.innerHTML = '<p style="color:#718096;margin-top:15px;">No sales data for this period.</p>';
             }
         }
+
+        function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
         loadDashboard();
     </script>
