@@ -4,7 +4,7 @@
 const { handler } = require('../lib/http');
 const { getDb } = require('../lib/db');
 const { scopedBranchId } = require('../lib/scope');
-const { todayManila, dayStart, addDays, DAY_EXPR, round2 } = require('../lib/util');
+const { todayManila, dayStart, addDays, isYmd, DAY_EXPR, round2 } = require('../lib/util');
 
 module.exports = handler(async (ctx) => {
   const db = await getDb();
@@ -14,7 +14,11 @@ module.exports = handler(async (ctx) => {
   const bid = scopedBranchId(ctx);
   const branch = bid !== null ? { branch_id: bid } : {};
   const today = todayManila();
-  const todayRange = { $gte: dayStart(today), $lt: dayStart(addDays(today, 1)) };
+  // Optional ?date_from=&date_to= (YYYY-MM-DD, Manila). Defaults to today.
+  let from = isYmd(ctx.query.date_from) ? ctx.query.date_from : today;
+  let to = isYmd(ctx.query.date_to) ? ctx.query.date_to : from;
+  if (to < from) [from, to] = [to, from];
+  const todayRange = { $gte: dayStart(from), $lt: dayStart(addDays(to, 1)) };
   const txns = db.collection('transactions');
 
   if (action === 'kpis') {
@@ -36,7 +40,8 @@ module.exports = handler(async (ctx) => {
 
   if (action === 'revenue_trend') {
     const rows = await txns.aggregate([
-      { $match: { status: 'completed', created_at: { $gte: dayStart(addDays(today, -6)) }, ...branch } },
+      { $match: { status: 'completed',
+          created_at: ctx.query.date_from ? todayRange : { $gte: dayStart(addDays(today, -6)) }, ...branch } },
       { $group: { _id: DAY_EXPR, revenue: { $sum: '$total' } } },
       { $sort: { _id: 1 } },
     ]).toArray();
@@ -60,6 +65,24 @@ module.exports = handler(async (ctx) => {
       { $limit: 5 },
     ]).toArray();
     return ctx.respond({ success: true, data: rows.map((r) => ({ name: r._id, total_qty: r.total_qty, total_revenue: round2(r.total_revenue) })) });
+  }
+
+  if (action === 'category_sales') {
+    const rows = await txns.aggregate([
+      { $match: { status: 'completed', created_at: todayRange, ...branch } },
+      { $unwind: '$items' },
+      { $group: { _id: '$items.product_id', name: { $first: '$items.product_name' }, qty: { $sum: '$items.quantity' }, revenue: { $sum: '$items.line_total' } } },
+    ]).toArray();
+    const ids = rows.map((r) => r._id).filter((x) => x != null);
+    const prods = await db.collection('products').find({ id: { $in: ids } }, { projection: { id: 1, category: 1 } }).toArray();
+    const cat = Object.fromEntries(prods.map((p) => [p.id, p.category]));
+    const byCat = {};
+    for (const r of rows) {
+      const c = cat[r._id] || 'Other';
+      byCat[c] = byCat[c] || { category: c, qty: 0, revenue: 0 };
+      byCat[c].qty += r.qty; byCat[c].revenue += r.revenue;
+    }
+    return ctx.respond({ success: true, data: Object.values(byCat).map((c) => ({ ...c, revenue: round2(c.revenue) })) });
   }
 
   if (action === 'peak_hour') {
