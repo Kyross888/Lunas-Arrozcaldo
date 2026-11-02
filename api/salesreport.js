@@ -16,8 +16,9 @@ module.exports = handler(async (ctx) => {
   if (!isYmd(to)) to = from;
 
   const bid = scopedBranchId(ctx);
+  const deletedView = ctx.query.status === 'voided';
   const match = {
-    status: 'completed',
+    status: deletedView ? 'voided' : 'completed',
     created_at: { $gte: dayStart(from), $lt: dayStart(addDays(to, 1)) },
     ...(bid !== null ? { branch_id: bid } : {}),
   };
@@ -60,6 +61,7 @@ module.exports = handler(async (ctx) => {
       created_at: fmtTs(t.created_at),
       first_name: um[t.user_id]?.first_name ?? null, last_name: um[t.user_id]?.last_name ?? null,
       item_count: (t.items || []).length,
+      items: (t.items || []).map((i) => ({ product_name: i.product_name, quantity: i.quantity, line_total: i.line_total })),
     })),
   });
 });
