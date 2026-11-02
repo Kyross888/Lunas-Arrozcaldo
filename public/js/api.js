@@ -134,16 +134,14 @@ const api = {
 
     // ── DASHBOARD ─────────────────────────────────────────────
     dashboard: {
-        kpis: (branchId = '') =>
-            fetchWithTimeout(`dashboard.php?action=kpis${branchId ? '&branch_id=' + branchId : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
-        revenueTrend: (branchId = '') =>
-            fetchWithTimeout(`dashboard.php?action=revenue_trend${branchId ? '&branch_id=' + branchId : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
-        orderSources: (branchId = '') =>
-            fetchWithTimeout(`dashboard.php?action=order_sources${branchId ? '&branch_id=' + branchId : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
-        topProducts: (branchId = '') =>
-            fetchWithTimeout(`dashboard.php?action=top_products${branchId ? '&branch_id=' + branchId : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
-        peakHour: (branchId = '') =>
-            fetchWithTimeout(`dashboard.php?action=peak_hour${branchId ? '&branch_id=' + branchId : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
+        _q: (action, branchId, range) =>
+            fetchWithTimeout(`dashboard.php?action=${action}${branchId ? '&branch_id=' + branchId : ''}${range && range.from ? '&date_from=' + range.from + '&date_to=' + (range.to || range.from) : ''}`, { credentials: 'same-origin' }).then(r => r.json()),
+        kpis: (branchId = '', range) => api.dashboard._q('kpis', branchId, range),
+        revenueTrend: (branchId = '', range) => api.dashboard._q('revenue_trend', branchId, range),
+        orderSources: (branchId = '', range) => api.dashboard._q('order_sources', branchId, range),
+        topProducts: (branchId = '', range) => api.dashboard._q('top_products', branchId, range),
+        categorySales: (branchId = '', range) => api.dashboard._q('category_sales', branchId, range),
+        peakHour: (branchId = '', range) => api.dashboard._q('peak_hour', branchId, range),
     },
 
     // ── SALES REPORT ─────────────────────────────────────────
