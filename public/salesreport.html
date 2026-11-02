@@ -543,6 +543,7 @@
             <h2 id="pageTitle">Sales Report</h2>
             <div class="header-actions">
                 <button class="btn-toggle-deleted" id="toggleDeletedBtn" onclick="toggleDeleted()"><i class="fa-solid fa-trash-can-arrow-up"></i> Deleted</button>
+                <input type="text" class="date-picker" id="searchInput" placeholder="Search ref, item, type..." oninput="renderRows()" style="min-width:210px;">
                 <input type="date" class="date-picker" id="datePicker">
             </div>
         </header>
@@ -690,11 +691,21 @@
             }
 
             // Table
+            txnCache = Array.isArray(transactions) ? transactions : [];
+            renderRows();
+        }
+
+        function renderRows() {
+            const tbody = document.getElementById('salesTableBody');
+            const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+            const txnList = txnCache.filter(t => !q ||
+                (t.reference_no || '').toLowerCase().includes(q) ||
+                (t.order_type || '').toLowerCase().includes(q) ||
+                (t.payment_method || '').toLowerCase().includes(q) ||
+                (t.items || []).some(i => (i.product_name || '').toLowerCase().includes(q)));
             tbody.innerHTML = '';
-            const txnList = Array.isArray(transactions) ? transactions : [];
-            txnCache = txnList;
             if (!txnList.length) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#718096;">' + (showDeleted ? 'No deleted orders for this date.' : 'No transactions for this date.') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#718096;">' + (q ? 'No orders match your search.' : showDeleted ? 'No deleted orders for this date.' : 'No transactions for this date.') + '</td></tr>';
                 return;
             }
             txnList.forEach(t => {
@@ -721,6 +732,7 @@
                         <td><span class="status-badge ${badgeClass}">${(t.payment_method || '').toUpperCase()}</span></td>
                         <td style="text-align:right;white-space:nowrap;">${showDeleted ? `
                             <button class="btn-restore" onclick="restoreOrder(${t.id})" title="Retrieve Transaction"><i class="fa-solid fa-rotate-left"></i> Retrieve</button>` : `
+                            <button class="btn-print" onclick="printReceipt(${t.id})" title="Print Receipt"><i class="fa-solid fa-print"></i> Receipt</button>
                             <button class="btn-delete" onclick="deleteOrder(${t.id})" title="Delete Transaction"><i class="fa-solid fa-trash"></i></button>`}</td>
                     </tr>`;
             });
