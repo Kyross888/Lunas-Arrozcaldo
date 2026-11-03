@@ -77,6 +77,19 @@ module.exports = handler(async (ctx) => {
     } });
   }
 
+  if (action === 'top_selling') {
+    const [best] = await txns.aggregate([
+      { $match: { ...done, created_at: dayRange(date) } },
+      { $unwind: '$items' },
+      { $group: { _id: '$items.product_name', qty: { $sum: '$items.quantity' }, pid: { $first: '$items.product_id' } } },
+      { $sort: { qty: -1 } },
+      { $limit: 1 },
+    ]).toArray();
+    if (!best) return ctx.respond({ success: true, data: null });
+    const p = best.pid != null ? await db.collection('products').findOne({ id: best.pid }) : null;
+    return ctx.respond({ success: true, data: { product_name: best._id, qty: best.qty, image_path: p?.image_path ?? null, icon: p?.icon ?? null } });
+  }
+
   if (action === 'monthly_revenue') {
     const rows = await txns.aggregate([
       { $match: done }, { $group: { _id: DAY_EXPR, revenue: { $sum: '$total' } } }, { $sort: { _id: 1 } },
