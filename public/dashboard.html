@@ -450,23 +450,59 @@
             document.getElementById('lbl-top').textContent = 'Top Selling Items ' + R.label;
             document.getElementById('lbl-trend').textContent = R.label === '(This Month)' ? 'Revenue Trend (This Month)' : 'Revenue Trend (7 Days' + (R.from === R.to && !isToday ? ' to ' + R.to : '') + ')';
 
-            // Self-contained fetcher (does not depend on a cached/old js/api.js)
-            const dq = (action, r) => fetch('dashboard.php?action=' + action + (b ? '&branch_id=' + b : '') +
-                '&date_from=' + r.from + '&date_to=' + r.to, { credentials: 'same-origin' })
-                .then(x => x.json()).catch(() => ({ success: false, data: [] }));
-            const [kpis, trend, cats, top] = await Promise.all([
-                dq('kpis', range),
-                dq('revenue_trend', { from: R.trendFrom, to: R.trendTo }),
-                dq('category_sales', range),
-                dq('top_products', range),
+            // Uses the same endpoints as the Sales Report / Inventory pages
+            // (proven to work), and builds every number from them here.
+            const getJson = (url) => fetch(url, { credentials: 'same-origin' }).then(x => x.json()).catch(() => ({ success: false }));
+            const sr = (f, t) => getJson('salesreport.php?date_from=' + f + '&date_to=' + t + (b ? '&branch_id=' + b : ''));
+            const [rep, repTrend, prodRes] = await Promise.all([
+                sr(R.from, R.to),
+                sr(R.trendFrom, R.trendTo),
+                getJson('products.php?action=list' + (b ? '&branch_id=' + b : '')),
             ]);
+            const prods = prodRes.success ? prodRes.data : [];
+            const txns = rep.success ? rep.transactions : [];
 
-            if (kpis.success) {
-                document.getElementById('kpi-revenue').textContent = fmt(kpis.revenue_today);
-                document.getElementById('kpi-orders').textContent = kpis.orders_today;
-                document.getElementById('kpi-lowstock').textContent = kpis.low_stock;
-                document.getElementById('kpi-outstock').textContent = kpis.out_of_stock;
-            }
+            const kpis = {
+                success: true,
+                revenue_today: rep.success ? rep.summary.total_revenue : 0,
+                orders_today: rep.success ? rep.summary.total_orders : 0,
+                low_stock: prods.filter(p => p.stock > 0 && p.stock <= 10).length,
+                out_of_stock: prods.filter(p => p.stock === 0 || p.stock === '0').length,
+            };
+
+            // revenue per day (fill empty days with 0)
+            const perDay = {};
+            (repTrend.success ? repTrend.transactions : []).forEach(t => {
+                const d = String(t.created_at).slice(0, 10);
+                perDay[d] = (perDay[d] || 0) + parseFloat(t.total || 0);
+            });
+            const days = [];
+            for (let d = R.trendFrom; d <= R.trendTo; d = shift(d, 1)) days.push(d);
+            const trend = { success: true, data: days.map(d => ({ day: d, revenue: perDay[d] || 0 })) };
+
+            // top items + category totals
+            const byItem = {};
+            txns.forEach(t => (t.items || []).forEach(i => {
+                const k = i.product_name || '';
+                byItem[k] = byItem[k] || { name: k, total_qty: 0, total_revenue: 0 };
+                byItem[k].total_qty += parseInt(i.quantity) || 0;
+                byItem[k].total_revenue += parseFloat(i.line_total) || 0;
+            }));
+            const itemList = Object.values(byItem).sort((a, b) => b.total_qty - a.total_qty);
+            const top = { success: true, data: itemList.slice(0, 5) };
+            const nameCat = {};
+            prods.forEach(p => { nameCat[String(p.name).trim().toLowerCase()] = p.category; });
+            const catAgg = {};
+            itemList.forEach(i => {
+                const c = nameCat[i.name.trim().toLowerCase()];
+                if (c) catAgg[c] = (catAgg[c] || 0) + i.total_qty;
+            });
+            const cats = { success: true, data: Object.keys(catAgg).map(c => ({ category: c, qty: catAgg[c] })) };
+
+            document.getElementById('kpi-revenue').textContent = fmt(kpis.revenue_today);
+            document.getElementById('kpi-orders').textContent = kpis.orders_today;
+            document.getElementById('kpi-lowstock').textContent = kpis.low_stock;
+            document.getElementById('kpi-outstock').textContent = kpis.out_of_stock;
 
             const rows = trend.success ? trend.data : [];
             revenueChart.data.labels = rows.map(d => new Date(d.day + 'T00:00:00+08:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }));
