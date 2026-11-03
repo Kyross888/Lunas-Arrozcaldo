@@ -45,6 +45,20 @@ module.exports = handler(async (ctx) => {
     if (bid !== null) filter.branch_id = bid;
 
     const rows = await products.find(filter).toArray();
+
+    // Photos are stored per branch row. If this branch's copy has no photo,
+    // borrow the photo from the same dish in another branch, so every
+    // phone/branch shows the same pictures.
+    const missing = [...new Set(rows.filter((r) => !r.image_path).map((r) => r.name))];
+    if (missing.length) {
+      const donors = await products.find(
+        { name: { $in: missing }, image_path: { $nin: [null, ''] } },
+        { projection: { name: 1, image_path: 1 } }
+      ).toArray();
+      const img = {};
+      for (const d of donors) if (!img[d.name]) img[d.name] = d.image_path;
+      for (const r of rows) if (!r.image_path && img[r.name]) r.image_path = img[r.name];
+    }
     const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i === -1 ? 99 : i; };
     rows.sort((a, b) => rank(a.category) - rank(b.category) || String(a.name).localeCompare(String(b.name)));
     return ctx.respond({ success: true, data: rows.map(clean) });
@@ -98,7 +112,7 @@ module.exports = handler(async (ctx) => {
   if (action === 'update') {
     ctx.requireAuth();
     const id = parseInt(ctx.query.id, 10) || 0;
-    await assertProductAccess(id);
+    const before = await assertProductAccess(id);
 
     const allowed = isMultipart
       ? ['name', 'category', 'price', 'stock', 'icon', 'branch_id', 'is_active']
@@ -124,6 +138,10 @@ module.exports = handler(async (ctx) => {
     if (!Object.keys(set).length) return ctx.respond({ success: false, error: 'Nothing to update.' }, 400);
 
     await products.updateOne({ id }, { $set: set });
+    // A new photo is shared with the same dish in every branch.
+    if (set.image_path) {
+      await products.updateMany({ name: before.name, is_active: true }, { $set: { image_path: set.image_path } });
+    }
     return ctx.respond({ success: true, message: 'Product updated.' });
   }
 
