@@ -451,7 +451,7 @@
                 <p style="font-size:14px;color:var(--text-light);margin-bottom:15px;">
                     This is the QR code customers scan in the POS Terminal when they pay with GCash. Upload a new picture to replace the old one.
                 </p>
-                <div class="form-group">
+                <div class="form-group" id="qr-branch-group">
                     <label>Apply to</label>
                     <select id="qr-branch" onchange="loadQrPreview()">
                         <option value="">All branches (default)</option>
@@ -562,7 +562,7 @@
             8: 'Tagbak'
         };
 
-        // ── GCash QR code (admin only) ────────────────────────
+        // ── GCash QR code ────────────────────────
         async function loadQrPreview() {
             const b = document.getElementById('qr-branch').value;
             const r = await fetch('settings.php?action=get_qr' + (b ? '&branch_id=' + b : ''), { credentials: 'same-origin' }).then(x => x.json()).catch(() => null);
@@ -609,7 +609,9 @@
             document.getElementById('profile-email').value = u.email;
             document.getElementById('profile-role').value = roleName;
             document.getElementById('profile-branch-field').value = branchName || 'Not assigned';
-            if (u.role === 'admin') { document.getElementById('payment-tab').style.display = ''; loadQrPreview(); }
+            document.getElementById('payment-tab').style.display = '';
+            if (u.role !== 'admin') document.getElementById('qr-branch-group').style.display = 'none'; // staff: own branch only
+            loadQrPreview();
 
         }
 
