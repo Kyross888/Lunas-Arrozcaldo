@@ -32,6 +32,7 @@
     { "source": "/register.php", "destination": "/register.html" },
     { "source": "/pos_terminal.php", "destination": "/pos_terminal.html" },
     { "source": "/inventory.php", "destination": "/inventory.html" },
+    { "source": "/settings.php", "has": [{ "type": "query", "key": "action" }], "destination": "/api/settings" },
     { "source": "/settings.php", "destination": "/settings.html" },
     { "source": "/offline.php", "destination": "/offline.html" }
   ],
