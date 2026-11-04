@@ -1054,7 +1054,7 @@
                     <div class="gcash-amount-label">Amount to Pay</div>
                     <div class="gcash-amount" id="gcashAmount">₱0.00</div>
                     <div id="qrCodeCanvas">
-                        <img src="Qr.png" alt="GCash QR" class="gcash-qr-img"></div>
+                        <img src="Qr.png" alt="GCash QR" class="gcash-qr-img" id="gcashQrImg"></div>
                     <div class="gcash-instructions">
                         📱 Open <strong>GCash</strong> → tap <strong>Pay QR</strong> → scan the code above.
                     </div>
@@ -1561,7 +1561,17 @@ function addToCart(productId, name, price) {
             }
         }
 
+        // Use the QR picture saved in Settings (falls back to the built-in Qr.png)
+        async function loadGcashQr() {
+            try {
+                const r = await fetch('settings.php?action=get_qr', { credentials: 'same-origin' }).then(x => x.json());
+                const img = document.getElementById('gcashQrImg');
+                if (r && r.success && r.image && img) img.src = r.image;
+            } catch (_) {}
+        }
+
         function showGCashQR() {
+            loadGcashQr();
             const totalText = document.getElementById('total').innerText;
             document.getElementById('gcashAmount').innerText = totalText;
             // Reset the reference field each time the QR modal is opened
@@ -1762,6 +1772,7 @@ function addToCart(productId, name, price) {
             return '₱' + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
 
+        loadGcashQr();
         init();
     </script>
 
