@@ -523,6 +523,22 @@
                     </div>
                 </div>
 
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm transition-colors duration-300 mb-8">
+                    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+                        <div style="width:64px;height:64px;border-radius:16px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-clock" style="color:#6366f1;font-size:26px;"></i>
+                        </div>
+                        <div style="min-width:0;flex:1 1 220px;">
+                            <span style="display:inline-block;background:#eef2ff;color:#6366f1;border:1px solid #c7d2fe;border-radius:999px;padding:2px 10px;font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;"><i class="fas fa-bolt" style="margin-right:4px;"></i>Peak Hour</span>
+                            <h3 id="peak-label" class="text-slate-400 font-bold text-xs">Busiest time today</h3>
+                            <p class="font-black text-slate-900 dark:text-white" id="peak-time" style="font-size:22px;">No sales yet</p>
+                            <p class="text-xs text-slate-400" id="peak-sub" style="margin-top:2px;"></p>
+                        </div>
+                        <div id="peak-bars" style="display:flex;align-items:flex-end;gap:3px;height:70px;flex:2 1 300px;min-width:240px;"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:6px;padding-left:84px;"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>11 PM</span></div>
+                </div>
+
                 <!-- Bottom Panels -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm flex flex-col">
@@ -907,12 +923,39 @@
             } catch (_) { nameEl.textContent = '—'; }
         }
 
+        function fmtHour(h) { const ap = h >= 12 ? 'PM' : 'AM'; const x = h % 12 === 0 ? 12 : h % 12; return x + ':00 ' + ap; }
+
+        async function loadPeakHour() {
+            const timeEl = document.getElementById('peak-time');
+            if (!timeEl) return;
+            try {
+                const res = await fetch(`admin.php?action=peak_hour&date=${selectedDate}`, { credentials: 'same-origin' }).then(r => r.json());
+                const d = res.success ? res.data : null;
+                document.getElementById('peak-label').textContent = selectedDate === todayStr() ? 'Busiest time today' : 'Busiest time on ' + selectedDate;
+                const bars = document.getElementById('peak-bars');
+                const max = d ? Math.max(1, ...d.hours.map(h => h.orders)) : 1;
+                bars.innerHTML = (d ? d.hours : []).map(h => {
+                    const isPeak = d.peak && h.hour === d.peak.hour;
+                    const ht = h.orders ? Math.max(8, Math.round(h.orders / max * 100)) : 4;
+                    return `<div title="${fmtHour(h.hour)} · ${h.orders} order${h.orders !== 1 ? 's' : ''}" style="flex:1;height:${ht}%;border-radius:4px;background:${isPeak ? '#6366f1' : (h.orders ? '#c7d2fe' : '#e2e8f0')};"></div>`;
+                }).join('');
+                if (d && d.peak) {
+                    timeEl.textContent = fmtHour(d.peak.hour) + ' – ' + fmtHour((d.peak.hour + 1) % 24);
+                    document.getElementById('peak-sub').textContent = d.peak.orders + ' order' + (d.peak.orders !== 1 ? 's' : '') + ' · ₱' + d.peak.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+                } else {
+                    timeEl.textContent = 'No sales yet';
+                    document.getElementById('peak-sub').textContent = '';
+                }
+            } catch (_) { timeEl.textContent = '—'; }
+        }
+
         async function loadTotalDiscounts() {
             const amountEl = document.getElementById('stat-total-discounts');
             const subEl    = document.getElementById('stat-discounts-sub');
             if (!amountEl) return;
             try {
                 loadTopSelling();
+                loadPeakHour();
                 const res = await fetch(`admin.php?action=total_discounts&date=${selectedDate}`, { credentials: 'same-origin' }).then(r => r.json());
                 if (!res.success) return;
                 const total = (parseFloat(res.data.total_discount) || 0) + (parseFloat(res.data.total_coupon_discount) || 0);
