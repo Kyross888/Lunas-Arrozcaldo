@@ -406,6 +406,9 @@
                 <button class="tab-btn" onclick="switchPanel('security', this)">
                     <i class="fa-solid fa-shield-halved"></i> Security
                 </button>
+                <button class="tab-btn" id="payment-tab" style="display:none;" onclick="switchPanel('payment', this)">
+                    <i class="fa-solid fa-qrcode"></i> GCash QR Code
+                </button>
                 <button class="tab-btn" style="color: var(--danger); margin-top: 20px;" onclick="confirmLogout()">
                     <i class="fa-solid fa-right-from-bracket"></i> Logout
                 </button>
@@ -441,6 +444,40 @@
                     <div class="color-dot" style="background: #ed8936;" onclick="changeTheme('#ed8936', '#c05621')"></div>
                     <div class="color-dot" style="background: #2d3748;" onclick="changeTheme('#2d3748', '#1a202c')"></div>
                 </div>
+            </div>
+
+            <div id="payment-panel" class="settings-panel hidden">
+                <div class="section-title">GCash QR Code</div>
+                <p style="font-size:14px;color:var(--text-light);margin-bottom:15px;">
+                    This is the QR code customers scan in the POS Terminal when they pay with GCash. Upload a new picture to replace the old one.
+                </p>
+                <div class="form-group">
+                    <label>Apply to</label>
+                    <select id="qr-branch" onchange="loadQrPreview()">
+                        <option value="">All branches (default)</option>
+                        <option value="1">Festive Mall</option>
+                        <option value="2">SM Central Market</option>
+                        <option value="3">General Luna</option>
+                        <option value="4">Jaro</option>
+                        <option value="5">Molo</option>
+                        <option value="6">La Paz</option>
+                        <option value="7">Calumpang</option>
+                        <option value="8">Tagbak</option>
+                    </select>
+                </div>
+                <div style="text-align:center;margin:10px 0 20px;">
+                    <div style="display:inline-block;padding:14px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;">
+                        <img id="qr-preview" src="Qr.png" alt="GCash QR" style="width:240px;max-width:100%;display:block;">
+                    </div>
+                    <div id="qr-source" style="font-size:12px;color:var(--text-light);margin-top:8px;"></div>
+                </div>
+                <div class="form-group">
+                    <label>New QR picture (PNG, JPG or WEBP, up to 3 MB)</label>
+                    <input type="file" id="qr-file" accept="image/png,image/jpeg,image/webp" onchange="previewQrFile()">
+                </div>
+                <button class="btn-save" onclick="saveQr()">Save QR Code</button>
+                <button class="btn-save" style="background:#718096;margin-left:8px;" onclick="resetQr()">Use Default</button>
+                <div id="qr-status" style="font-size:13px;margin-top:14px;"></div>
             </div>
 
             <div id="security-panel" class="settings-panel hidden">
@@ -506,6 +543,7 @@
         function switchPanel(panelName, btn) {
             document.getElementById('store-panel').classList.add('hidden');
             document.getElementById('security-panel').classList.add('hidden');
+            document.getElementById('payment-panel').classList.add('hidden');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(panelName + '-panel').classList.remove('hidden');
             btn.classList.add('active');
@@ -524,6 +562,36 @@
             8: 'Tagbak'
         };
 
+        // ── GCash QR code (admin only) ────────────────────────
+        async function loadQrPreview() {
+            const b = document.getElementById('qr-branch').value;
+            const r = await fetch('settings.php?action=get_qr' + (b ? '&branch_id=' + b : ''), { credentials: 'same-origin' }).then(x => x.json()).catch(() => null);
+            document.getElementById('qr-preview').src = (r && r.image) || 'Qr.png';
+            document.getElementById('qr-source').textContent = !r ? '' : r.source === 'branch' ? 'Custom QR for this branch' : r.source === 'default' ? 'Using the default QR for all branches' : 'Using the built-in QR picture';
+        }
+        function previewQrFile() {
+            const f = document.getElementById('qr-file').files[0];
+            if (f) document.getElementById('qr-preview').src = URL.createObjectURL(f);
+        }
+        function qrMsg(t, ok) { const e = document.getElementById('qr-status'); e.textContent = t; e.style.color = ok ? '#2f855a' : '#e53e3e'; }
+        async function saveQr() {
+            const f = document.getElementById('qr-file').files[0];
+            if (!f) return qrMsg('Please choose a picture first.', false);
+            const fd = new FormData();
+            fd.append('image', f);
+            fd.append('branch_id', document.getElementById('qr-branch').value);
+            const r = await fetch('settings.php?action=set_qr', { method: 'POST', body: fd, credentials: 'same-origin' }).then(x => x.json()).catch(() => null);
+            if (r && r.success) { qrMsg('Saved! The POS Terminal now shows this QR code.', true); document.getElementById('qr-file').value = ''; loadQrPreview(); }
+            else qrMsg((r && r.error) || 'Could not save. Try again.', false);
+        }
+        async function resetQr() {
+            if (!confirm('Go back to the default GCash QR picture?')) return;
+            const fd = new FormData();
+            fd.append('branch_id', document.getElementById('qr-branch').value);
+            const r = await fetch('settings.php?action=reset_qr', { method: 'POST', body: fd, credentials: 'same-origin' }).then(x => x.json()).catch(() => null);
+            if (r && r.success) { qrMsg('Reset to default.', true); loadQrPreview(); } else qrMsg((r && r.error) || 'Could not reset.', false);
+        }
+
         async function loadProfile() {
             const res = await api.auth.me().catch(() => null);
             if (!res || !res.success) {
@@ -541,6 +609,7 @@
             document.getElementById('profile-email').value = u.email;
             document.getElementById('profile-role').value = roleName;
             document.getElementById('profile-branch-field').value = branchName || 'Not assigned';
+            if (u.role === 'admin') { document.getElementById('payment-tab').style.display = ''; loadQrPreview(); }
 
         }
 
