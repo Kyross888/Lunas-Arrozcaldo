@@ -2,7 +2,7 @@
 //  sw.js — Luna's POS Service Worker v4
 // ============================================================
 
-const CACHE_NAME   = 'lunas-pos-v9';
+const CACHE_NAME   = 'lunas-pos-v10';
 const OFFLINE_PAGE = '/offline.php';
 
 const SHELL_ASSETS = [
