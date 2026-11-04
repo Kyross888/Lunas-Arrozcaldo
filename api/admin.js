@@ -90,6 +90,18 @@ module.exports = handler(async (ctx) => {
     return ctx.respond({ success: true, data: { product_name: best._id, qty: best.qty, image_path: p?.image_path ?? null, icon: p?.icon ?? null } });
   }
 
+  if (action === 'peak_hour') {
+    const rows = await txns.aggregate([
+      { $match: { ...done, created_at: dayRange(date) } },
+      { $group: { _id: { $hour: { date: '$created_at', timezone: 'Asia/Manila' } }, orders: { $sum: 1 }, revenue: { $sum: '$total' } } },
+      { $sort: { _id: 1 } },
+    ]).toArray();
+    const hours = Array.from({ length: 24 }, (_, h) => ({ hour: h, orders: 0, revenue: 0 }));
+    for (const r of rows) hours[r._id] = { hour: r._id, orders: r.orders, revenue: round2(r.revenue) };
+    const peak = hours.reduce((a, b) => (b.orders > a.orders ? b : a), hours[0]);
+    return ctx.respond({ success: true, data: { hours, peak: peak.orders > 0 ? peak : null } });
+  }
+
   if (action === 'monthly_revenue') {
     const rows = await txns.aggregate([
       { $match: done }, { $group: { _id: DAY_EXPR, revenue: { $sum: '$total' } } }, { $sort: { _id: 1 } },
