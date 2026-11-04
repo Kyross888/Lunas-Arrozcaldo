@@ -1,8 +1,8 @@
 // ============================================================
 //  api/settings.js — store settings (GCash QR code)
 //  get_qr    : any logged-in user  → the QR for their branch (falls back to the default one)
-//  set_qr    : admin only (multipart "image", optional branch_id; blank = all branches)
-//  reset_qr  : admin only → go back to the default picture
+//  set_qr    : multipart "image" — staff: their own branch · admin: any branch (blank = all)
+//  reset_qr  : go back to the default picture
 // ============================================================
 const { handler } = require('../lib/http');
 const { getDb } = require('../lib/db');
@@ -30,9 +30,14 @@ module.exports = handler(async (ctx) => {
     return ctx.respond({ success: true, image: doc ? doc.value : null, source: source || 'none' });
   }
 
-  if (!isAdmin(user)) return ctx.respond({ success: false, error: 'Only an admin can change the GCash QR code.' }, 403);
   const input = Object.keys(ctx.form).length ? ctx.form : ctx.body;
-  const bid = parseBranch(input.branch_id);
+  // Admin may pick any branch (blank = all branches); staff change their own branch's QR only.
+  let bid;
+  if (isAdmin(user)) bid = parseBranch(input.branch_id);
+  else {
+    bid = parseBranch(user.branch_id);
+    if (!bid) return ctx.respond({ success: false, error: 'Your account has no branch assigned.' }, 403);
+  }
 
   if (action === 'set_qr') {
     const f = ctx.files.image;
